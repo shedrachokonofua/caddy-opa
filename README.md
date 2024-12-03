@@ -16,21 +16,31 @@ xcaddy build --with github.com/shedrachokonofua/caddy-opa
 }
 
 example.com {
-  route / {
+  route /* {
     opa_policy `
       package caddy.authz
 
       default allow = false
 
+      # Parse JWT from Authorization header
+      token := io.jwt.decode(trim_prefix(input.headers.Authorization, "Bearer "))
+
       allow {
-        input.method == "GET"
-        input.path == "/public"
+        # Role-based access
+        token.payload.roles[_] == "admin"
+        input.path.startswith("/admin/")
       }
 
       allow {
-        input.method == "POST"
-        input.path == "/private"
-        input.user == "admin"
+        # Tenant isolation
+        token.payload.tenant_id == input.headers.X-Tenant-ID
+        input.method == "GET"
+      }
+
+      allow {
+        # Allow unauthenticated users to access public routes
+        input.path.startswith("/public/")
+        input.method == "GET"
       }
     `
 
